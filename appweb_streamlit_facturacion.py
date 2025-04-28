@@ -5,9 +5,16 @@ import pandas as pd
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
+from reportlab.platypus import Table, TableStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
 from datetime import datetime
 import os
+import pytz
+from textwrap import wrap
+from PIL import Image
+import requests
 
 
 FACTURA_TRACKER = "factura_numero.txt"
@@ -42,120 +49,129 @@ def guardar_historial(factura_data):
     df_final.to_excel(HISTORIAL_PATH, index=False)
 
 def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal, iva):
-    from reportlab.lib import colors
-    from reportlab.platypus import Table, TableStyle
-    import pytz
-    from PIL import Image
-    import requests
 
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
 
-    # Encabezado visual (banner)
+    # Registrar fuente Calibri
+    pdfmetrics.registerFont(TTFont('Calibri', 'calibri.ttf'))
+    pdfmetrics.registerFont(TTFont('Calibri-Bold', 'calibri.ttf'))
+
+    # Encabezado
     c.setFillColorRGB(0.93, 0.93, 0.93)
     c.roundRect(30, 700, 530, 60, 10, fill=1)
 
-    # Logo (a la derecha dentro del banner)
     try:
-        logo_url = "https://i.imgur.com/BdIHbRs.png"  # Usa tu logo preferido aquí
-        response = requests.get(logo_url)
-        logo = Image.open(BytesIO(response.content))
-        logo_path = "/tmp/logo_temp.png"
-        logo.save(logo_path)
-        c.drawImage(logo_path, 500, 710, width=45, height=40, mask='auto')
+        c.drawImage("pandastore.jpg", 500, 710, width=45, height=40, mask='auto')
     except:
         pass
 
-    # Texto del encabezado
-    c.setFont("Helvetica-Bold", 16)
+    c.setFont("Calibri-Bold", 16)
     c.setFillColor(colors.darkblue)
     c.drawCentredString(295, 735, "Panda Store")
 
-    c.setFont("Helvetica", 10)
+    c.setFont("Calibri", 10)
     c.setFillColor(colors.gray)
     c.drawCentredString(295, 720, "Factura Comercial")
 
-    # Fecha y Factura No (fuera del banner)
     c.setFillColor(colors.black)
-    c.setFont("Helvetica", 10)
     tz = pytz.timezone('America/Managua')
     now = datetime.now(tz).strftime("%d/%m/%Y %H:%M")
     factura_no = obtener_numero_factura()
 
+    c.setFont("Calibri-Bold", 10)
     c.drawString(30, 685, f"Factura No: {factura_no}")
     c.drawRightString(560, 685, f"Fecha: {now}")
 
-    # Cuadros de tienda y cliente
+    # Cuadros
     c.setFillColorRGB(0.8, 0.9, 1)
-    c.roundRect(30, 610, 250, 60, 5, fill=1)
-    c.roundRect(310, 610, 250, 60, 5, fill=1)
+    c.roundRect(30, 610, 250, 70, 5, fill=1)
+    c.roundRect(310, 610, 250, 70, 5, fill=1)
 
     c.setFillColor(colors.black)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(40, 660, "Facturado Por:")
-    c.setFont("Helvetica", 8)
-    c.drawString(40, 650, "Panda Store")
-    c.drawString(40, 640, "Reparto San Juan, Managua")
-    c.drawString(40, 630, "pandastorenic@gmail.com")
-    c.drawString(40, 620, "+505 8372 5528")
+    c.setFont("Calibri-Bold", 9)
+    c.drawString(40, 670, "Facturado Por:")
+    c.setFont("Calibri", 8)
+    c.drawString(40, 660, "Panda Store")
+    c.drawString(40, 650, "Reparto San Juan, Managua")
+    c.drawString(40, 640, "pandastorenic@gmail.com")
+    c.drawString(40, 630, "+505 8372 5528")
 
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(320, 660, "Facturado A:")
-    c.setFont("Helvetica", 8)
-    c.drawString(320, 650, nombre)
-    c.drawString(320, 640, direccion)
-    c.drawString(320, 630, celular)
-    c.drawString(320, 620, f"Proveedor: {proveedor}")
+    c.setFont("Calibri-Bold", 9)
+    c.drawString(320, 670, "Facturado A:")
+    c.setFont("Calibri", 8)
+    c.drawString(320, 660, nombre)
 
-    # Detalle de productos (más arriba)
-    y_tabla = 570
-    table_data = [["Id", "Descripción", "IVA %", "Cantidad", "Monto sin IVA", "IVA (C$)", "Monto total"]]
+    direccion_lines = wrap(direccion, 80)
+    for i, line in enumerate(direccion_lines):
+        c.drawString(320, 650 - (i * 10), line)
+
+    c.drawString(320, 630 - (10 * len(direccion_lines)), celular)
+    c.drawString(320, 620 - (10 * len(direccion_lines)), f"Proveedor: {proveedor}")
+
+    # Tabla productos
+    y_tabla = 580 - (10 * len(direccion_lines))
+    table_data = [["Id", "Descripción", "IVA %", "Cantidad", "Precio\nUnitario", "Descuento\n(C$)", "Monto\nsin IVA", "IVA\n(C$)", "Monto\nTotal"]]
+    
     for idx, item in enumerate(carrito, start=1):
         monto_sin_iva = item['total_linea'] / 1.15
         iva_c = item['total_linea'] - monto_sin_iva
+    
+        descripcion_wrapped = "\n".join(wrap(item['descripcion'], 25))
+    
         table_data.append([
             str(idx),
-            item['descripcion'],
+            descripcion_wrapped,
             "15%",
             str(item['cantidad']),
+            f"C${item['precio']:.2f}",
+            f"C${item['descuento']:.2f}",
             f"C${monto_sin_iva:.2f}",
             f"C${iva_c:.2f}",
             f"C${item['total_linea']:.2f}"
         ])
-
-    table = Table(table_data, colWidths=[30, 180, 45, 45, 70, 60, 70])
+    
+    # Definimos tabla
+    table = Table(table_data, colWidths=[25, 155, 35, 35, 55, 55, 65, 50, 65])
+    
+    # Aplicamos estilo
     table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.lightblue),
         ('TEXTCOLOR', (0,0), (-1,0), colors.black),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0,0), (-1,0), 8),
+        ('FONTNAME', (0,0), (-1,0), 'Calibri-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 8),  # <-- Reducción de fuente en encabezado
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('FONTNAME', (0,1), (-1,-1), 'Calibri'),
+        ('FONTSIZE', (0,1), (-1,-1), 8),
         ('BACKGROUND', (0,1), (-1,-1), colors.whitesmoke),
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey)
     ]))
+    
+    # Dibujamos la tabla
     table.wrapOn(c, 30, y_tabla)
     table.drawOn(c, 30, y_tabla - (len(table_data) * 18))
-
-    # Resumen final (espaciado y alineado 3 columnas)
+    
+    # Resumen Totales
     resumen_y = y_tabla - (len(table_data) * 18) - 30
-    c.setFont("Helvetica-Bold", 10)
+    c.setFont("Calibri-Bold", 10)
     detalles = ["Monto sin IVA:", "IVA:", "Monto Total:"]
     valores = [f"C${subtotal:.2f}", f"C${iva:.2f}", f"C${total:.2f}"]
 
     for i, (d, v) in enumerate(zip(detalles, valores)):
         y = resumen_y - i * 15
         c.drawString(350, y, d)
-        c.drawString(410, y, "")  # columna vacía
+        c.drawString(410, y, "")
         c.drawRightString(560, y, v)
 
     # Políticas
     politica = [
-        "Los productos vendidos por Panda Store tienen una garantía de 1 mes a partir de la fecha de compra.",
-        "La garantía cubre defectos de fabricación y no incluye daños causados por mal uso o accidentes.",
-        "El pago debe realizarse en su totalidad en el momento de la compra, salvo acuerdo escrito.",
-        "Métodos de pago aceptados: transferencia bancaria y efectivo."
+        "Los productos vendidos por Panda Store tienen garantía de 1 mes a partir de la fecha de compra.",
+        "No cubre daños por mal uso o accidentes.",
+        "Pago inmediato salvo acuerdo escrito.",
+        "Métodos aceptados: transferencia bancaria y efectivo."
     ]
-    c.setFont("Helvetica", 7)
+    c.setFont("Calibri", 7)
     y = resumen_y - 60
     for linea in politica:
         c.drawString(30, y, linea)
@@ -166,6 +182,7 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
     buffer.seek(0)
     return buffer
 
+    
 st.set_page_config(page_title="Panda Facturación", layout="centered")
 st.image("https://i.imgur.com/NZFZZvD.jpeg", width=150)
 st.title("Facturación Digital - Panda App")
