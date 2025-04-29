@@ -55,7 +55,7 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
 
     # Registrar fuente Calibri
     pdfmetrics.registerFont(TTFont('Calibri', 'calibri.ttf'))
-    pdfmetrics.registerFont(TTFont('Calibri-Bold', 'calibri.ttf'))
+    pdfmetrics.registerFont(TTFont('Calibri-Bold', 'Calibri-Bold.ttf'))
 
     # Encabezado
     c.setFillColorRGB(0.93, 0.93, 0.93)
@@ -66,11 +66,11 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
     except:
         pass
 
-    c.setFont("Calibri-Bold", 16)
+    c.setFont("Calibri-Bold", 18)
     c.setFillColor(colors.darkblue)
     c.drawCentredString(295, 735, "Panda Store")
 
-    c.setFont("Calibri", 10)
+    c.setFont("Calibri-Bold", 10)
     c.setFillColor(colors.gray)
     c.drawCentredString(295, 720, "Factura Comercial")
 
@@ -100,17 +100,31 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
     c.setFont("Calibri-Bold", 9)
     c.drawString(320, 670, "Facturado A:")
     c.setFont("Calibri", 8)
-    c.drawString(320, 660, nombre)
-
-    direccion_lines = wrap(direccion, 80)
-    for i, line in enumerate(direccion_lines):
-        c.drawString(320, 650 - (i * 10), line)
-
-    c.drawString(320, 630 - (10 * len(direccion_lines)), celular)
-    c.drawString(320, 620 - (10 * len(direccion_lines)), f"Proveedor: {proveedor}")
+    
+    direccion_lines = wrap(direccion, 60)
+    linea_actual = 660
+    altura_cuadro_cliente = 70
+    espacio_minimo = 20
+    
+    # Escribir nombre
+    c.drawString(320, linea_actual, nombre)
+    
+    # Escribir cada línea de la dirección
+    for line in direccion_lines:
+        linea_actual -= 10
+        c.drawString(320, linea_actual, line)
+    
+    # Escribir celular
+    linea_actual -= 10
+    c.drawString(320, linea_actual, celular)
+    
+    # Escribir proveedor
+    linea_actual -= 10
+    c.drawString(320, linea_actual, f"Proveedor: {proveedor}")
 
     # Tabla productos
-    y_tabla = 580 - (10 * len(direccion_lines))
+    direccion_lines = len(direccion_lines)
+    y_tabla = 610 - altura_cuadro_cliente - (direccion_lines * 10) - espacio_minimo
     table_data = [["Id", "Descripción", "IVA %", "Cantidad", "Precio\nUnitario", "Descuento\n(C$)", "Monto\nsin IVA", "IVA\n(C$)", "Monto\nTotal"]]
     
     for idx, item in enumerate(carrito, start=1):
@@ -153,10 +167,11 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
     table.drawOn(c, 30, y_tabla - (len(table_data) * 18))
     
     # Resumen Totales
+    monto_ahorrado = sum([item['descuento'] for item in carrito])
     resumen_y = y_tabla - (len(table_data) * 18) - 30
     c.setFont("Calibri-Bold", 10)
-    detalles = ["Monto sin IVA:", "IVA:", "Monto Total:"]
-    valores = [f"C${subtotal:.2f}", f"C${iva:.2f}", f"C${total:.2f}"]
+    detalles = ["Monto sin IVA:", "IVA:", "Monto Total:","Monto ahorrado:"]
+    valores = [f"C${subtotal:.2f}", f"C${iva:.2f}", f"C${total:.2f}",f"C${monto_ahorrado:.2f}"]
 
     for i, (d, v) in enumerate(zip(detalles, valores)):
         y = resumen_y - i * 15
@@ -202,6 +217,9 @@ if menu == "Crear Factura":
         productos = leer_productos_excel(uploaded_file)
         nombre = st.text_input("Nombre del Cliente")
         celular = st.text_input("Celular")
+        if not celular.isnumeric() and celular != "":
+            st.warning("Por favor ingrese solo números en el campo Celular.")
+            celular = ""
         direccion = st.text_input("Dirección")
 
         proveedor = st.selectbox("Selecciona el proveedor", list(proveedores_info.keys()))
