@@ -210,6 +210,9 @@ proveedores_info = {
     'PedidosYa': 'https://i.imgur.com/KxhxMwF.png'
 }
 
+if "carrito" not in st.session_state:
+    st.session_state.carrito = []
+    
 if menu == "Crear Factura":
     st.subheader("📄 Crear Factura")
     uploaded_file = st.file_uploader("Sube tu archivo Excel de productos", type=["xlsx"])
@@ -228,7 +231,8 @@ if menu == "Crear Factura":
         texto_buscar = st.text_input("Buscar producto")
         productos_filtrados = [p for p in productos if texto_buscar.lower() in p['descripcion'].lower()]
 
-        carrito = []
+        carrito = st.session_state.carrito
+        
         for p in productos_filtrados:
             with st.expander(p['descripcion']):
                 st.image(p['imagen'], width=150)
@@ -238,7 +242,24 @@ if menu == "Crear Factura":
                 if cantidad > 0:
                     subtotal = p['precio'] * cantidad
                     total_linea = subtotal - descuento
-                    carrito.append({"descripcion": p['descripcion'], "cantidad": cantidad, "precio": p['precio'], "subtotal": subtotal, "descuento": descuento, "total_linea": total_linea})
+                    
+                    nuevo_item = {
+                        "descripcion": p['descripcion'],
+                        "cantidad": cantidad,
+                        "precio": p['precio'],
+                        "subtotal": subtotal,
+                        "descuento": descuento,
+                        "total_linea": total_linea
+                    }
+                    
+                    ya_existe = any(
+                        isinstance(item, dict) and 'descripcion' in item and item['descripcion'] == nuevo_item['descripcion']
+                        for item in carrito
+                    )
+
+                    if not ya_existe:
+                        carrito.append(nuevo_item)
+                    
 
         if carrito:
             st.subheader("Vista Previa de la Factura")
@@ -251,6 +272,18 @@ if menu == "Crear Factura":
             factura_df = pd.DataFrame(carrito)
             st.dataframe(factura_df[["cantidad", "descripcion", "precio", "subtotal", "descuento", "total_linea"]])
 
+            st.subheader("🗑 Eliminar productos del carrito")
+            
+            for idx, item in enumerate(carrito):
+                col1, col2 = st.columns([6, 1])
+                with col1:
+                    st.markdown(f"**{item['descripcion']}** - Cantidad: {item['cantidad']} - Total: C${item['total_linea']:.2f}")
+                with col2:
+                    if st.button("❌", key=f"delete_{idx}"):
+                        st.session_state.carrito.pop(idx)
+                        st.rerun()
+            
+            
             subtotal_total = factura_df["total_linea"].sum() / 1.15
             iva_total = factura_df["total_linea"].sum() - subtotal_total
             total_total = factura_df["total_linea"].sum()
