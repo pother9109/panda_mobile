@@ -239,6 +239,9 @@ if menu == "Crear Factura":
                 st.write(f"Precio: C${p['precio']:.2f}")
                 cantidad = st.number_input(f"Cantidad - {p['descripcion']}", min_value=0, step=1, key=p['codigo'])
                 descuento = st.number_input(f"Descuento (C$) - {p['descripcion']}", min_value=0.0, step=1.0, key=str(p['codigo'])+'_desc')
+
+            #agrega el carrito 
+            if st.button(f" 🛒Agregar al carrito 📦💡- {p['descripcion']}", key=f"add_{p['codigo']}"):
                 if cantidad > 0:
                     subtotal = p['precio'] * cantidad
                     total_linea = subtotal - descuento
@@ -251,7 +254,8 @@ if menu == "Crear Factura":
                         "descuento": descuento,
                         "total_linea": total_linea
                     }
-                    
+
+                    #Evita duplicados
                     ya_existe = any(
                         isinstance(item, dict) and 'descripcion' in item and item['descripcion'] == nuevo_item['descripcion']
                         for item in carrito
@@ -262,26 +266,32 @@ if menu == "Crear Factura":
                     
 
         if carrito:
-            st.subheader("Vista Previa de la Factura")
+            st.subheader("Vista Previa de la Factura 🧾")
             st.image("https://i.imgur.com/NZFZZvD.jpeg", width=100)
             st.markdown(f"**Cliente:** {nombre}")
             st.markdown(f"**Celular:** {celular}")
             st.markdown(f"**Dirección:** {direccion}")
             st.markdown(f"**Proveedor:** {proveedor}")
 
-            factura_df = pd.DataFrame(carrito)
+            # Actualizar siempre desde session_state.carrito
+            carrito_actual = st.session_state.carrito
+            factura_df = pd.DataFrame(carrito_actual)
+            
             st.dataframe(factura_df[["cantidad", "descripcion", "precio", "subtotal", "descuento", "total_linea"]])
 
             st.subheader("🗑 Eliminar productos del carrito")
             
-            for idx, item in enumerate(carrito):
+            #Codigo que actualiza y elimina el carrito
+            for idx in range(len(st.session_state.carrito)):
+                item = st.session_state.carrito[idx]
                 col1, col2 = st.columns([6, 1])
                 with col1:
                     st.markdown(f"**{item['descripcion']}** - Cantidad: {item['cantidad']} - Total: C${item['total_linea']:.2f}")
                 with col2:
-                    if st.button("❌", key=f"delete_{idx}"):
+                    if st.button("❌", key=f"delete_{item['descripcion']}_{idx}"):
                         st.session_state.carrito.pop(idx)
                         st.rerun()
+                        break  # importante para evitar errores de rango
             
             
             subtotal_total = factura_df["total_linea"].sum() / 1.15
