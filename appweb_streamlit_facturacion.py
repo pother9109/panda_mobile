@@ -198,6 +198,71 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
     return buffer
 
     
+
+def generar_factura_termica_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal, iva):
+    from reportlab.lib.pagesizes import mm
+    from reportlab.pdfgen import canvas
+    from io import BytesIO
+
+    buffer = BytesIO()
+    ancho_papel = 80 * mm
+    largo_papel = 300 * mm
+    c = canvas.Canvas(buffer, pagesize=(ancho_papel, largo_papel))
+
+    y = largo_papel - 10 * mm
+    c.setFont("Courier-Bold", 10)
+    c.drawCentredString(ancho_papel / 2, y, "🐼 PANDA STORE")
+    y -= 5 * mm
+    c.setFont("Courier", 8)
+    c.drawCentredString(ancho_papel / 2, y, "Reparto San Juan, Managua")
+    y -= 4 * mm
+    c.drawCentredString(ancho_papel / 2, y, "Tel: +505 8372 5528")
+    y -= 6 * mm
+    c.line(5 * mm, y, ancho_papel - 5 * mm, y)
+    y -= 5 * mm
+
+    c.drawString(5 * mm, y, f"Cliente: {nombre}")
+    y -= 4 * mm
+    c.drawString(5 * mm, y, f"Tel: {celular}")
+    y -= 4 * mm
+    c.drawString(5 * mm, y, f"Dir: {direccion[:35]}")
+    y -= 5 * mm
+    c.line(5 * mm, y, ancho_papel - 5 * mm, y)
+    y -= 5 * mm
+
+    c.drawString(5 * mm, y, "Producto      Cant P.Unit  Total")
+    y -= 4 * mm
+    c.line(5 * mm, y, ancho_papel - 5 * mm, y)
+    y -= 5 * mm
+
+    for item in carrito:
+        descripcion = item['descripcion'][:12]
+        cantidad = item['cantidad']
+        precio = item['precio']
+        total_linea = item['total_linea']
+        c.drawString(5 * mm, y, f"{descripcion:<12} {cantidad:<4} {precio:>6.2f} {total_linea:>6.2f}")
+        y -= 4.5 * mm
+
+    y -= 2 * mm
+    c.line(5 * mm, y, ancho_papel - 5 * mm, y)
+    y -= 5 * mm
+    c.drawRightString(ancho_papel - 5 * mm, y, f"Subtotal: C${subtotal:.2f}")
+    y -= 4 * mm
+    c.drawRightString(ancho_papel - 5 * mm, y, f"IVA (15%): C${iva:.2f}")
+    y -= 4 * mm
+    c.drawRightString(ancho_papel - 5 * mm, y, f"Total: C${total:.2f}")
+    y -= 6 * mm
+    c.line(5 * mm, y, ancho_papel - 5 * mm, y)
+    y -= 6 * mm
+    c.drawCentredString(ancho_papel / 2, y, "Gracias por su compra 🐼")
+    y -= 10 * mm
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
 st.set_page_config(page_title="Panda Facturación", layout="centered")
 st.image("https://i.imgur.com/NZFZZvD.jpeg", width=150)
 st.title("Facturación Digital - Panda App")
@@ -228,41 +293,48 @@ if menu == "Crear Factura":
         proveedor = st.selectbox("Selecciona el proveedor", list(proveedores_info.keys()))
         st.image(proveedores_info[proveedor], width=150)
 
-        texto_buscar = st.text_input("Buscar producto")
-        productos_filtrados = [p for p in productos if texto_buscar.lower() in p['descripcion'].lower()]
-
-        carrito = st.session_state.carrito
         
-        for p in productos_filtrados:
-            with st.expander(p['descripcion']):
-                st.image(p['imagen'], width=150)
-                st.write(f"Precio: C${p['precio']:.2f}")
-                cantidad = st.number_input(f"Cantidad - {p['descripcion']}", min_value=0, step=1, key=p['codigo'])
-                descuento = st.number_input(f"Descuento (C$) - {p['descripcion']}", min_value=0.0, step=1.0, key=str(p['codigo'])+'_desc')
+        with st.expander("🛒 Catálogo de productos"):
+            texto_buscar = st.text_input("Buscar producto")
+            productos_filtrados = [p for p in productos if texto_buscar.lower() in p['descripcion'].lower()]
+            carrito = st.session_state.carrito
 
-            #agrega el carrito 
-            if st.button(f" 🛒Agregar al carrito 📦💡- {p['descripcion']}", key=f"add_{p['codigo']}"):
-                if cantidad > 0:
-                    subtotal = p['precio'] * cantidad
-                    total_linea = subtotal - descuento
-                    
-                    nuevo_item = {
-                        "descripcion": p['descripcion'],
-                        "cantidad": cantidad,
-                        "precio": p['precio'],
-                        "subtotal": subtotal,
-                        "descuento": descuento,
-                        "total_linea": total_linea
-                    }
+            col1, col2 = st.columns(2)
+            for idx, p in enumerate(productos_filtrados):
+                col = col1 if idx % 2 == 0 else col2
+                with col:
+                    with st.container():
+                        st.image(p['imagen'], width=150)
+                        st.markdown(f"**{p['descripcion']}**")
+                        st.markdown(f"💵 Precio: C${p['precio']:.2f}")
+                        
+                        cantidad = st.number_input(f"Cantidad - {p['descripcion']}", min_value=1, step=1, key=p['codigo'])
+                        descuento = st.number_input(f"Descuento (C$) - {p['descripcion']}", min_value=0.0, step=1.0, key=str(p['codigo'])+'_desc')
 
-                    #Evita duplicados
-                    ya_existe = any(
-                        isinstance(item, dict) and 'descripcion' in item and item['descripcion'] == nuevo_item['descripcion']
-                        for item in carrito
-                    )
+                        if st.button(f"🛒 Agregar al carrito", key=f"add_{p['codigo']}"):
+                            if cantidad > 0:
+                                subtotal = p['precio'] * cantidad
+                                total_linea = subtotal - descuento
 
-                    if not ya_existe:
-                        carrito.append(nuevo_item)
+                                nuevo_item = {
+                                    "descripcion": p['descripcion'],
+                                    "cantidad": cantidad,
+                                    "precio": p['precio'],
+                                    "subtotal": subtotal,
+                                    "descuento": descuento,
+                                    "total_linea": total_linea
+                                }
+
+                                ya_existe = any(
+                                    isinstance(item, dict) and 'descripcion' in item and item['descripcion'] == nuevo_item['descripcion']
+                                    for item in carrito
+                                )
+
+                                if not ya_existe:
+                                    carrito.append(nuevo_item)
+                                else:
+                                    st.warning("Este producto ya está en el carrito.")
+
                     
 
         if carrito:
@@ -302,7 +374,15 @@ if menu == "Crear Factura":
 
             if st.button("Confirmar y Generar Factura"):
                 pdf = generar_pdf(nombre, celular, direccion, proveedor, carrito, total_total, subtotal_total, iva_total)
+                pdf_termico = generar_factura_termica_pdf(nombre, celular, direccion, proveedor, carrito, total_total, subtotal_total, iva_total)
+
+                # Guardar en session_state
+                st.session_state.pdf_factura = pdf
+                st.session_state.pdf_termico = pdf_termico
+
+
                 incrementar_numero_factura()
+
                 factura_data = {
                     "Factura": obtener_numero_factura()-1,
                     "Fecha": datetime.now().strftime('%Y-%m-%d %H:%M'),
@@ -313,7 +393,12 @@ if menu == "Crear Factura":
                 }
                 guardar_historial(factura_data)
                 st.success("Factura generada con éxito!")
-                st.download_button("Descargar Factura PDF", pdf, file_name="factura.pdf")
+
+            if "pdf_factura" in st.session_state and "pdf_termico" in st.session_state:
+                st.download_button("Descargar Factura PDF", st.session_state.pdf_factura, file_name="factura.pdf")
+                st.download_button("Descargar Ticket Térmico PDF", st.session_state.pdf_termico, file_name="ticket_termico.pdf")
+
+               
 
 elif menu == "Historial":
     st.subheader("📚 Historial de Facturas")
