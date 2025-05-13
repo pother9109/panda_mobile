@@ -197,7 +197,7 @@ def generar_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal,
     buffer.seek(0)
     return buffer
 
-    
+#---------------------------------------------------------------------------------------------------------------------------------------------
 
 def generar_factura_termica_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal, iva):
     from reportlab.lib.pagesizes import mm
@@ -262,6 +262,141 @@ def generar_factura_termica_pdf(nombre, celular, direccion, proveedor, carrito, 
     buffer.seek(0)
     return buffer
 
+
+
+def generar_factura_personalizada_pdf(nombre, celular, direccion, proveedor, carrito, total, subtotal, iva):
+    from reportlab.lib.pagesizes import mm
+    from reportlab.pdfgen import canvas
+    from io import BytesIO
+    from datetime import datetime
+
+    buffer = BytesIO()
+    ancho_papel = 80 * mm
+    largo_papel = 270 * mm
+    c = canvas.Canvas(buffer, pagesize=(ancho_papel, largo_papel))
+    y = largo_papel - 45 * mm  # más margen para el logo
+
+    try:
+        c.drawImage("loco_termico_panda.png", ancho_papel / 2 - 20 * mm, y, width=40 * mm, height=40 * mm, preserveAspectRatio=True, mask="auto")
+    except:
+        pass
+    y -= 5 * mm
+
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(ancho_papel / 2, y, "PandaStore & Co")
+    y -= 4 * mm
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(ancho_papel / 2, y, "Reparto San Juan, Managua, Nicaragua, 11027")
+    y -= 4 * mm
+    c.drawCentredString(ancho_papel / 2, y, "Correo: pandastorenic@gmail.com")
+    y -= 4 * mm
+    c.drawCentredString(ancho_papel / 2, y, "Teléfono: +505 8372 5528")
+    y -= 6 * mm
+
+    c.setFont("Helvetica-Bold", 10)
+    c.drawCentredString(ancho_papel / 2, y, "Factura")
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 8)
+    c.setFillColorRGB(1, 0, 0)
+    c.drawString(8 * mm, y, f"#F{obtener_numero_factura()}")
+    c.setFillColorRGB(0, 0, 0)
+    c.drawRightString(ancho_papel - 8 * mm, y, datetime.now().strftime("Date: %d/%m/%Y"))
+    y -= 6 * mm
+    c.line(5 * mm, y, ancho_papel - 5 * mm, y)
+    y -= 5 * mm
+
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(8 * mm, y, "Cliente:")
+    c.setFont("Helvetica", 7)
+    c.drawString(28 * mm, y, nombre)
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(8 * mm, y, "Contacto:")
+    c.setFont("Helvetica", 7)
+    c.drawString(28 * mm, y, celular)
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(8 * mm, y, "Dirección:")
+    c.setFont("Helvetica", 7)
+    c.drawString(28 * mm, y, direccion)
+    y -= 6 * mm
+
+    c.setFillColorRGB(0.7, 0.7, 0.7)
+    c.rect(5 * mm, y, ancho_papel - 10 * mm, 5 * mm, fill=1)
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(6 * mm, y + 1.5 * mm, "ITEM")
+    c.drawString(45 * mm, y + 1.5 * mm, "CANT")
+    c.drawRightString(ancho_papel - 6 * mm, y + 1.5 * mm, "TOTAL")
+    y -= 6 * mm
+
+    for item in carrito:
+        nombre = item['descripcion'][:20]
+        version = f"Desc: -{item['descuento']:.2f}" if item['descuento'] else ""
+        cant = item['cantidad']
+        total_item = item['total_linea']
+
+        c.setFont("Helvetica-Bold", 7)
+        c.drawString(6 * mm, y, nombre)
+        c.setFont("Helvetica", 7)
+        c.drawString(45 * mm, y, str(cant))
+        c.drawRightString(ancho_papel - 6 * mm, y, f"C${total_item:,.2f}")
+        y -= 4 * mm
+        c.setFont("Helvetica", 6)
+        c.drawString(6 * mm, y, version)
+        y -= 4 * mm
+        c.setDash(1, 2)
+        c.line(6 * mm, y, ancho_papel - 6 * mm, y)
+        c.setDash()
+        y -= 4 * mm
+
+    c.setFont("Helvetica", 7)
+    c.drawRightString(ancho_papel - 6 * mm, y, f"SUB - TOTAL: C${subtotal:,.2f}")
+    y -= 4 * mm
+    c.drawRightString(ancho_papel - 6 * mm, y, f"IVA:         C${iva:,.2f}")
+    y -= 4 * mm
+    descuento_total = sum([item["descuento"] for item in carrito])
+    c.drawRightString(ancho_papel - 6 * mm, y, f"DESCUENTO:   C${descuento_total:,.2f}")
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 8)
+    c.drawRightString(ancho_papel - 6 * mm, y, f"TOTAL: C${total:,.2f}")
+    y -= 8 * mm
+
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(6 * mm, y, "Pago")
+    y -= 4 * mm
+    c.setFont("Helvetica", 6)
+    c.drawString(6 * mm, y, "1. Pago inmediato salvo acuerdo por escrito.")
+    y -= 3.5 * mm
+    c.drawString(6 * mm, y, "2. Medio de pago aceptado: Transferencia bancaria o efectivo.")
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(6 * mm, y, "Garantía")
+    y -= 4 * mm
+    c.setFont("Helvetica", 6)
+    c.drawString(6 * mm, y, "1. Garantía de 1 mes desde la compra.")
+    y -= 3.5 * mm
+    c.drawString(6 * mm, y, "2. Solo defectos de fábrica. No incluye daños causados por mal uso.")
+    y -= 35 * mm
+
+    try:
+        c.drawImage("QR.jpg", ancho_papel / 2 - 15 * mm, y, width=30 * mm, height=30 * mm)
+    except:
+        pass
+    y -= 5 * mm
+
+    c.setFont("Helvetica-Bold", 7)
+    c.drawCentredString(ancho_papel / 2, y, "¡Síguenos para más Tecnología!")
+    y -= 4 * mm
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(ancho_papel / 2, y, "TikTok • Instagram • WhatsApp")
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+#-----------------------------------------------------------------------------------------------------------------------------------------------
 
 st.set_page_config(page_title="Panda Facturación", layout="centered")
 st.image("https://i.imgur.com/NZFZZvD.jpeg", width=150)
@@ -394,10 +529,18 @@ if menu == "Crear Factura":
                 guardar_historial(factura_data)
                 st.success("Factura generada con éxito!")
 
+                #factura_demo = generar_factura_personalizada_pdf_demo()
+                #st.download_button("Descargar Factura Estilizada PDF", factura_demo, file_name="factura_panda_diseño.pdf")
+                st.session_state.pdf_estilizada = generar_factura_personalizada_pdf(
+                    nombre, celular, direccion, proveedor, carrito, total_total, subtotal_total, iva_total
+                )
+
             if "pdf_factura" in st.session_state and "pdf_termico" in st.session_state:
                 st.download_button("Descargar Factura PDF", st.session_state.pdf_factura, file_name="factura.pdf")
                 st.download_button("Descargar Ticket Térmico PDF", st.session_state.pdf_termico, file_name="ticket_termico.pdf")
 
+            if "pdf_estilizada" in st.session_state:
+                st.download_button("Descargar Factura Estilizada PDF", st.session_state.pdf_estilizada, file_name="factura_panda_diseño.pdf")
                
 
 elif menu == "Historial":
